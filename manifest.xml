@@ -11,8 +11,8 @@
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="Smart Email Assistant"/>
   <Description DefaultValue="Summarize and flag unread emails using Graph API and local LLM"/>
-  <IconUrl DefaultValue="https://your-github-pages-url/icon.png"/>
-  <SupportUrl DefaultValue="https://your-github-pages-url/support.html"/>
+  <IconUrl DefaultValue="https://github.com/Mayant-Golwala/smart-email-assistant/icon.png"/>
+  <SupportUrl DefaultValue="https://github.com/Mayant-Golwala/smart-email-assistant/support.html"/>
 
   <Hosts>
     <Host Name="Mailbox"/>
@@ -30,7 +30,7 @@
   </ExtendedPermissions>
 
   <DefaultSettings>
-    <SourceLocation DefaultValue="https://your-github-pages-url/taskpane/index.html"/>
+    <SourceLocation DefaultValue="https://github.com/Mayant-Golwala/smart-email-assistant/taskpane/index.html"/>
   </DefaultSettings>
 
   <Permissions>ReadWriteMailbox</Permissions>
@@ -50,7 +50,7 @@
       <Hosts>
         <Host xsi:type="MailHost">
           <DesktopFormFactor>
-            <FunctionFile Url="https://your-github-pages-url/taskpane/index.html"/>
+            <FunctionFile Url="https://github.com/Mayant-Golwala/smart-email-assistant/taskpane/index.html"/>
             <ExtensionPoint xsi:type="MessageReadCommandSurface">
               <OfficeTab id="TabDefault">
                 <Group id="msgReadGroup">
@@ -78,12 +78,12 @@
       </Hosts>
       <Resources>
         <bt:Images>
-          <bt:Image id="icon16" DefaultValue="https://your-github-pages-url/assets/icon16.png"/>
-          <bt:Image id="icon32" DefaultValue="https://your-github-pages-url/assets/icon32.png"/>
-          <bt:Image id="icon80" DefaultValue="https://your-github-pages-url/assets/icon80.png"/>
+          <bt:Image id="icon16" DefaultValue="https://github.com/Mayant-Golwala/smart-email-assistant/assets/icon16.png"/>
+          <bt:Image id="icon32" DefaultValue="https://github.com/Mayant-Golwala/smart-email-assistant/assets/icon32.png"/>
+          <bt:Image id="icon80" DefaultValue="https://github.com/Mayant-Golwala/smart-email-assistant/assets/icon80.png"/>
         </bt:Images>
         <bt:Urls>
-          <bt:Url id="taskpaneUrl" DefaultValue="https://your-github-pages-url/taskpane/index.html"/>
+          <bt:Url id="taskpaneUrl" DefaultValue="https://github.com/Mayant-Golwala/smart-email-assistant/taskpane/index.html"/>
         </bt:Urls>
         <bt:ShortStrings>
           <bt:String id="groupLabel" DefaultValue="Smart Assistant"/>
