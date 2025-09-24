@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Email Assistant Demo</title>
+    <!-- Tailwind CSS CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Set a custom font and body styles -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        /* Custom animation for the pulsing loading dots */
+        @keyframes pulse-dot { 0%, 100% { transform: scale(0); } 50% { transform: scale(1); } }
+        .pulse-dot { width: 8px; height: 8px; background-color: #6366f1; border-radius: 50%; animation: pulse-dot 1.5s infinite ease-in-out; }
+        .pulse-dot-1 { animation-delay: -0.5s; }
+        .pulse-dot-2 { animation-delay: -0.25s; }
+
+        /* Loading overlay for the textarea */
+        .loading-overlay { position: absolute; inset: 0; background: rgba(255, 255, 255, 0.8); display: flex; align-items: center; justify-content: center; border-radius: 0.5rem; z-index: 10; }
+
+        /* Full screen loading overlay with blur effect */
+        .fullscreen-loading-overlay { position: fixed; inset: 0; background-color: rgba(17, 24, 39, 0.6); display: flex; align-items: center; justify-content: center; z-index: 50; backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); }
+        
+        /* Modal styles */
+        .modal-body { max-height: 80vh; overflow-y: auto; }
+        .email-action-btn, .event-action-btn { flex: 1; padding: 0.5rem 1rem; border-radius: 0.75rem; font-weight: bold; transition: background-color 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem;}
+        
+        /* Tooltip styles */
+        .tooltip-container { position: relative; display: inline-block; }
+        .tooltip-container .tooltip-text { visibility: hidden; background-color: #374151; color: #fff; text-align: center; border-radius: 6px; padding: 5px 8px; position: absolute; z-index: 1; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; white-space: nowrap; }
+        .tooltip-container .tooltip-text::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #374151 transparent transparent transparent; }
+        .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
+        
+        /* Active button styles */
+        .pagination-btn, .filter-btn, .view-toggle-btn, .calendar-view-mode-btn, .calendar-filter-btn { transition: all 0.2s ease-in-out; }
+        .pagination-btn.active, .view-toggle-btn.active, .calendar-view-mode-btn.active { background-color: #4f46e5; color: white; }
+        
+        /* Themed filter buttons */
+        .filter-btn { padding: 0.5rem 1rem; border-radius: 0.75rem; font-weight: 700; background-color: #e5e7eb; color: #374151; display: flex; align-items: center; gap: 0.5rem; }
+        .filter-btn.active[data-filter="Urgent"] { background-color: #ef4444; color: white; }
+        .filter-btn.active[data-filter="High Priority"] { background-color: #f59e0b; color: white; }
+        .filter-btn.active[data-filter="General"] { background-color: #22c55e; color: white; }
+        .filter-btn.active[data-filter="Promotional"] { background-color: #8b5cf6; color: white; }
+        .filter-btn.active[data-filter="All"] { background-color: #4f46e5; color: white; }
+
+        .calendar-filter-btn { padding: 0.25rem 0.75rem; border-radius: 0.5rem; font-weight: 600; font-size: 0.875rem; background-color: #e5e7eb; color: #374151; border: 2px solid transparent; }
+        
+        /* Calendar specific styles */
+        .calendar-day-header { text-align: center; padding: 0.5rem; background-color: #f9fafb; font-weight: 600; color: #4b5563; position: sticky; top: 0; z-index: 25; }
+        .calendar-day { min-height: 120px; position: relative; background-color: white; padding: 0.5rem; }
+        .calendar-day.other-month { background-color: #f9fafb; }
+        .calendar-day.today { background-color: #eef2ff; }
+        .day-number { font-size: 0.875rem; font-weight: 500; }
+        .calendar-event { padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.75rem; margin-top: 0.25rem; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-left: 4px solid; }
+        .calendar-event.conflict { border: 2px solid #ef4444 !important; }
+
+        .calendar-event-General { background-color: #dcfce7; color: #166534; border-color: #22c55e; }
+        .calendar-event-ScrumCeremonies { background-color: #e0e7ff; color: #3730a3; border-color: #6366f1; }
+        .calendar-event-ImportantMeeting { background-color: #fef3c7; color: #92400e; border-color: #f59e0b; }
+        .calendar-event-Other { background-color: #e5e7eb; color: #4b5563; border-color: #6b7280; }
+        
+        /* Week/Month View Shared Styles */
+        .week-view-header-wrapper { position: sticky; top: 0; z-index: 30; background-color: #f9fafb; }
+        .month-view-scroll-container { max-height: 70vh; overflow-y: auto; border: 1px solid #e5e7eb; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background-color: #e5e7eb; }
+
+        /* Week View Styles */
+        .week-view-header-wrapper { display: flex; border: 1px solid #e5e7eb; border-bottom: none; }
+        .time-column-header { width: 80px; flex-shrink: 0; border-right: 1px solid #e5e7eb; }
+        .day-headers-container { flex-grow: 1; display: grid; grid-template-columns: repeat(7, 1fr); }
+        .week-view-scroll-container { max-height: 70vh; overflow-y: auto; }
+        .week-view-wrapper { display: flex; border-left: 1px solid #e5e7eb; border-right: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; }
+        .time-column { width: 80px; font-size: 0.75rem; text-align: right; color: #6b7280; flex-shrink: 0; }
+        .time-slot { height: 60px; border-top: 1px solid #e5e7eb; padding-right: 8px; }
+        .time-slot:first-child { border-top: none; }
+        .day-columns-container { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); }
+        .day-column { position: relative; border-left: 1px solid #e5e7eb; }
+        .day-column-header { text-align: center; padding: 0.5rem; }
+        .day-column-header.today { background-color: #4f46e5; color: white; border-radius: 6px 6px 0 0; }
+        .day-events-container { position: relative; height: 1440px; /* 24 hours * 60px/hr */ }
+        .week-event { position: absolute; left: 2px; right: 2px; padding: 4px; border-radius: 4px; overflow: hidden; z-index: 10; transition: all 0.2s ease-in-out; display: flex; flex-direction: column; }
+        .week-event.conflict { border: 2px solid #ef4444 !important; z-index: 11; }
+        .now-indicator { position: absolute; width: 100%; height: 2px; background-color: #ef4444; z-index: 20; }
+        .now-indicator::before { content: ''; position: absolute; left: -5px; top: -4px; width: 10px; height: 10px; background-color: #ef4444; border-radius: 50%; }
+
+        #summary-content .sender-summary, #briefing-content, #ai-prep-content {
+            border-bottom: 1px solid #e5e7eb; padding-bottom: 0.75rem; margin-bottom: 0.75rem;
+        }
+        #summary-content .sender-summary:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        #summary-content ul, #briefing-content ul, #ai-prep-content ul { list-style-type: disc; padding-left: 20px; }
+    </style>
+</head>
+<body class="min-h-screen bg-f3f4f6">
+
+    <main class="max-w-7xl mx-auto p-8">
+        <!-- Header with View Toggle -->
+        <div class="flex items-center justify-between space-x-2 mb-8">
+            <div class="flex items-center space-x-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-indigo-400" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg><h1 id="main-title" class="text-3xl font-bold text-gray-800">AI Smart Assistant</h1></div>
+            <div id="view-toggle-container" class="flex space-x-2 bg-gray-200 p-1 rounded-xl hidden">
+                <button id="inbox-view-btn" class="view-toggle-btn active px-4 py-2 text-sm font-bold rounded-lg">Inbox</button>
+                <button id="calendar-view-btn" class="view-toggle-btn px-4 py-2 text-sm font-bold rounded-lg">Calendar</button>
+            </div>
+        </div>
+        
+        <!-- Access Token Input -->
+        <div id="tokenInputContainer" class="bg-white p-6 rounded-2xl shadow-lg mb-8">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Enter Your Graph API Access Token</h3>
+            <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 items-end">
+                <div class="flex-1 w-full"><label for="accessTokenInput" class="block text-sm font-medium">Access Token: <span class="text-red-500">*</span></label><input type="password" id="accessTokenInput" class="block w-full rounded-lg border-gray-300 p-2" placeholder="Paste your token here..."></div>
+                <div class="flex space-x-2"><button id="saveTokenBtn" class="w-full md:w-auto bg-indigo-600 text-white font-bold py-3 px-6 rounded-xl">Save & Fetch</button><button id="clearTokenBtn" class="w-full md:w-auto bg-gray-200 font-bold py-3 px-6 rounded-xl">Clear Token</button></div>
+            </div>
+        </div>
+
+        <!-- INBOX VIEW -->
+        <div id="inbox-view" class="hidden">
+            <div id="controls-container" class="bg-white p-6 rounded-2xl shadow-lg mb-8">
+                <div class="flex flex-col sm:flex-row flex-wrap justify-between items-center gap-4 mb-4">
+                    <div class="flex items-center flex-wrap gap-4">
+                        <h2 class="text-xl font-bold">Emails</h2>
+                        <div id="filter-container" class="flex flex-wrap items-center justify-center gap-2">
+                            <button class="filter-btn" data-filter="All">All</button>
+                            <button class="filter-btn" data-filter="Urgent">🚨 Urgent</button>
+                            <button class="filter-btn" data-filter="High Priority">⚠️ High</button>
+                            <button class="filter-btn" data-filter="General">✉️ General</button>
+                            <button class="filter-btn" data-filter="Promotional">🛍️ Promotional</button>
+                        </div>
+                    </div>
+                     <div class="flex items-center gap-4">
+                        <input type="text" id="email-search" placeholder="Search emails..." class="rounded-lg border-gray-300 p-2">
+                        <div class="flex items-center gap-2"><label for="sort-by" class="text-sm font-medium">Sort By:</label><select id="sort-by" class="rounded-lg border-gray-300 p-2"><option value="newest">Newest</option><option value="oldest">Oldest</option></select></div>
+                        <div class="flex items-center gap-2"><label for="sender-filter" class="text-sm font-medium">Sender:</label><select id="sender-filter" class="rounded-lg border-gray-300 p-2 w-40"><option value="All">All Senders</option></select></div>
+                        <button id="refreshBtn" class="bg-gray-200 font-bold py-2 px-4 rounded-xl flex items-center">
+                           <svg class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0110.803 6.425c.07.124.12.26.151.401.076.353.116.71.116 1.074.001 2.923-2.378 5.303-5.303 5.303-1.63 0-3.111-.73-4.103-1.928a.75.75 0 011.008-1.12c.797.946 1.947 1.528 3.167 1.528 2.067 0 3.75-1.683 3.75-3.75 0-.256-.035-.506-.104-.753-.162-.572-.455-1.125-.865-1.666A5.502 5.502 0 0010 3.5a5.5 5.5 0 00-5.5 5.5.75.75 0 01-1.5 0A7 7 0 019 2.5a.75.75 0 011.5 0v.5a.75.75 0 001.5 0v-.5a.75.75 0 011.5 0v1.75c0 .414.336.75.75.75s.75-.336.75-.75V3c0-1.657-1.343-3-3-3H4zm1 14a1 1 0 011-1h1v2a1 1 0 01-2 0v-1z" clip-rule="evenodd" /></svg>Refresh
+                        </button>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center mt-4">
+                    <button id="composeBtn" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl">📝 Compose</button>
+                    <button id="summarizeAllBtn" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl">✨ Summarize All Emails</button>
+                </div>
+            </div>
+            <div id="bulk-actions-bar" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-900 text-white p-4 rounded-xl shadow-2xl flex items-center gap-4 hidden z-40">
+                <span id="selected-count" class="font-bold"></span>
+                <button data-action="summarize" class="bg-indigo-600 font-bold py-2 px-4 rounded-xl">✨ Summarize</button>
+                <button data-action="read" class="bg-indigo-600 font-bold py-2 px-4 rounded-xl">✔️ Mark Read</button>
+                <button data-action="archive" class="bg-yellow-500 text-gray-900 font-bold py-2 px-4 rounded-xl">🗄️ Archive</button>
+                <button data-action="delete" class="bg-red-500 font-bold py-2 px-4 rounded-xl">🗑️ Delete</button>
+                <button data-action="close" class="text-gray-400 hover:text-white"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
+            <div id="summary-section" class="bg-white p-6 rounded-2xl shadow-lg mb-8 hidden relative">
+                <button id="hide-summary-btn" class="absolute top-6 right-6 text-gray-500 hover:text-gray-800 z-10"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+                <div class="flex justify-between items-center mb-4 pr-8">
+                    <h3 class="text-xl font-bold">AI Summary & Analysis</h3>
+                    <div id="summary-filter-container" class="flex items-center gap-2">
+                        <label for="summary-sender-filter" class="text-sm font-medium">Filter by Sender:</label>
+                        <select id="summary-sender-filter" class="rounded-lg border-gray-300 p-2 w-48"></select>
+                    </div>
+                </div>
+                <div id="summary-content" class="prose max-w-full"></div>
+            </div>
+            <div id="pagination-controls" class="flex flex-col sm:flex-row justify-between items-center mb-6 hidden">
+                 <div class="text-sm text-gray-600">
+                    <span id="email-count-info"></span> emails found.
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2 text-sm">
+                        <label for="page-size-select">Emails per page:</label>
+                        <select id="page-size-select" class="rounded-lg border-gray-300 p-1">
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button id="prev-page-btn" class="pagination-btn bg-white px-4 py-2 text-sm font-bold rounded-lg border disabled:opacity-50" disabled>&laquo; Previous</button>
+                        <span id="page-info" class="text-sm font-medium"></span>
+                        <button id="next-page-btn" class="pagination-btn bg-white px-4 py-2 text-sm font-bold rounded-lg border disabled:opacity-50" disabled>Next &raquo;</button>
+                    </div>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="email-container">
+                <div id="initial-message" class="col-span-3 text-center text-gray-500 p-8"><p>Please enter your Graph API token to get started.</p></div>
+            </div>
+            <div id="inbox-message-container" class="hidden text-center p-12 bg-white rounded-2xl shadow-lg"><h3></h3><p></p></div>
+        </div>
+
+        <!-- CALENDAR VIEW -->
+        <div id="calendar-view" class="hidden">
+            <div class="bg-white p-6 rounded-2xl shadow-lg mb-8">
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+                    <!-- Left side: Month/Year Navigation -->
+                    <div class="flex items-center gap-4">
+                        <button id="prev-period-btn" class="p-2 rounded-full hover:bg-gray-200 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        <div id="calendar-title-container" class="relative text-center w-48 h-12 flex items-center justify-center bg-indigo-600 text-white font-bold text-xl rounded-xl shadow-md">
+                            <span id="calendar-title-text"></span>
+                        </div>
+                        <button id="next-period-btn" class="p-2 rounded-full hover:bg-gray-200 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                    </div>
+                    <!-- Right side: Actions -->
+                    <div class="flex items-center flex-wrap justify-center gap-2">
+                         <div class="flex space-x-1 bg-gray-200 p-1 rounded-xl">
+                            <button id="month-view-mode-btn" class="calendar-view-mode-btn px-3 py-1 text-sm font-bold rounded-lg">Month</button>
+                            <button id="week-view-mode-btn" class="calendar-view-mode-btn active px-3 py-1 text-sm font-bold rounded-lg">Week</button>
+                        </div>
+                        <button id="daily-briefing-btn" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl">AI Daily Briefing</button>
+                        <button id="ai-find-time-btn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-xl">Find Available Slot</button>
+                        <button id="calendar-refresh-btn" class="bg-gray-200 font-bold py-2 px-4 rounded-xl flex items-center">
+                           <svg class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0110.803 6.425c.07.124.12.26.151.401.076.353.116.71.116 1.074.001 2.923-2.378 5.303-5.303 5.303-1.63 0-3.111-.73-4.103-1.928a.75.75 0 011.008-1.12c.797.946 1.947 1.528 3.167 1.528 2.067 0 3.75-1.683 3.75-3.75 0-.256-.035-.506-.104-.753-.162-.572-.455-1.125-.865-1.666A5.502 5.502 0 0010 3.5a5.5 5.5 0 00-5.5 5.5.75.75 0 01-1.5 0A7 7 0 019 2.5a.75.75 0 011.5 0v.5a.75.75 0 001.5 0v-.5a.75.75 0 011.5 0v1.75c0 .414.336.75.75.75s.75-.336.75-.75V3c0-1.657-1.343-3-3-3H4zm1 14a1 1 0 011-1h1v2a1 1 0 01-2 0v-1z" clip-rule="evenodd" /></svg>Refresh
+                        </button>
+                    </div>
+                </div>
+                <div id="calendar-filter-container" class="flex flex-wrap items-center justify-center gap-2 mb-4"></div>
+                <div id="calendar-container"></div>
+            </div>
+        </div>
+
+        <!-- Modals -->
+        <div id="email-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 hidden items-center justify-center p-4 z-50"><div class="bg-white p-8 rounded-2xl max-w-2xl w-full shadow-2xl relative"><button id="close-modal" class="absolute top-4 right-4 text-gray-500"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button><div id="modal-content" class="modal-body"></div></div></div>
+        <div id="reply-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 hidden items-center justify-center p-4 z-50"><div class="bg-white p-8 rounded-2xl max-w-2xl w-full shadow-2xl relative"><button id="close-reply-modal" class="absolute top-4 right-4 text-gray-500"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button><div id="reply-modal-content"><h3 id="reply-modal-title" class="text-xl font-bold mb-4"></h3><div class="mb-4"><label for="reply-to" class="block text-sm font-medium">To: <span class="text-red-500">*</span></label><input type="email" id="reply-to" class="mt-1 w-full rounded-md border border-gray-300 p-2"></div><div class="mb-4"><label for="reply-cc" class="block text-sm font-medium">CC:</label><input type="email" id="reply-cc" class="mt-1 w-full rounded-md border border-gray-300 p-2"></div><div class="mb-4"><label for="reply-subject" class="block text-sm font-medium">Subject: <span class="text-red-500">*</span></label><input type="text" id="reply-subject" class="mt-1 w-full rounded-md border border-gray-300 p-2"></div><div class="relative"><label for="reply-body" class="block text-sm font-medium">Body: <span class="text-red-500">*</span></label><textarea id="reply-body" rows="10" class="mt-1 w-full rounded-md border border-gray-300 p-2"></textarea><div id="reply-loading-overlay" class="loading-overlay hidden"><div class="flex gap-2"><div class="pulse-dot"></div><div class="pulse-dot"></div><div class="pulse-dot"></div></div></div></div><div class="mt-6 flex justify-end gap-4"><button id="send-reply-btn" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl">Send</button></div></div></div></div>
+        <div id="event-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 hidden items-center justify-center p-4 z-50"><div class="bg-white p-8 rounded-2xl max-w-2xl w-full shadow-2xl relative min-h-[50vh]"><button id="close-event-modal" class="absolute top-4 right-4 text-gray-500"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button><div id="event-modal-content" class="modal-body"></div></div></div>
+        <div id="briefing-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 hidden items-center justify-center p-4 z-50"><div class="bg-white p-8 rounded-2xl max-w-2xl w-full shadow-2xl relative min-h-[50vh]"><button id="close-briefing-modal" class="absolute top-4 right-4 text-gray-500"><svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button><div id="briefing-modal-content" class="modal-body"><h3 id="briefing-title" class="text-2xl font-bold mb-4"></h3><div id="briefing-content" class="prose max-w-full"></div></div></div></div>
+        <div id="fullscreen-loading-overlay" class="fullscreen-loading-overlay hidden"><div class="flex flex-col items-center p-8 bg-white/30 backdrop-blur-md rounded-2xl"><div class="flex gap-2"><div class="pulse-dot"></div><div class="pulse-dot"></div><div class="pulse-dot"></div></div><p id="loading-message" class="mt-4 text-white font-bold text-lg"></p></div></div>
+        <div id="feedback-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 hidden items-center justify-center p-4 z-50"><div class="bg-white p-6 rounded-2xl w-full max-w-sm text-center"><h3 id="feedback-title" class="text-xl font-bold mb-2"></h3><div id="feedback-message-container" class="mb-4"></div><button id="feedback-close-btn" class="bg-indigo-600 text-white font-bold py-2 px-6 rounded-xl">OK</button></div></div>
+        <div id="confirmation-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 hidden items-center justify-center p-4 z-50">
+            <div class="bg-white p-6 rounded-2xl w-full max-w-sm text-center shadow-2xl">
+                <h3 id="confirmation-title" class="text-xl font-bold mb-2">Confirm Action</h3>
+                <p id="confirmation-message" class="mb-4 text-gray-600">Are you sure you want to proceed?</p>
+                <div class="flex justify-center gap-4">
+                    <button id="cancel-btn" class="bg-gray-200 font-bold py-2 px-6 rounded-xl">Cancel</button>
+                    <button id="confirm-btn" class="bg-red-600 text-white font-bold py-2 px-6 rounded-xl">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- GLOBAL STATE & CONSTANTS ---
+        let accessToken = "";
+        const graphApiBaseEndpoint = "https://graph.microsoft.com/v1.0/me";
+        let fetchedEmails = [], calendarEvents = [];
+        let selectedEmails = new Set();
+        let currentFilter = 'All', currentSort = 'newest', currentSearchQuery = '', currentSenderFilter = 'All';
+        let currentPage = 1, pageSize = 10;
+        let currentCalendarDate = new Date(), currentCalendarFilter = 'All', currentCalendarViewMode = 'week';
+        const eventCategories = {
+            ImportantMeeting: { class: 'calendar-event-ImportantMeeting', color: '#f59e0b' },
+            General: { class: 'calendar-event-General', color: '#22c55e' },
+            ScrumCeremonies: { class: 'calendar-event-ScrumCeremonies', color: '#6366f1' },
+            Other: { class: 'calendar-event-Other', color: '#6b7280' }
+        };
+        const emailCategoryStyles = {
+            Urgent: { color: '#ef4444' },
+            'High Priority': { color: '#f59e0b' },
+            General: { color: '#22c55e' },
+            Promotional: { color: '#8b5cf6' }
+        };
+
+        // --- DOM ELEMENT REFERENCES ---
+        const $ = (selector) => document.querySelector(selector);
+        const $$ = (selector) => document.querySelectorAll(selector);
+        const inboxView = $('#inbox-view'), calendarView = $('#calendar-view'), mainTitle = $('#main-title');
+        const tokenInputContainer = $('#tokenInputContainer'), fullscreenLoadingOverlay = $('#fullscreen-loading-overlay');
+        const loadingMessageEl = $('#loading-message'), emailModal = $('#email-modal'), replyModal = $('#reply-modal'), eventModal = $('#event-modal');
+        const calendarContainer = $('#calendar-container'), calendarTitleText = $('#calendar-title-text');
+        const viewToggleContainer = $('#view-toggle-container');
+        const feedbackMessageContainer = $('#feedback-message-container');
+
+        // --- GENERAL HELPER FUNCTIONS ---
+        function showFeedback(title, message) { 
+            $('#feedback-title').textContent = title; 
+            feedbackMessageContainer.innerHTML = message; // Use innerHTML to render formatted messages
+            $('#feedback-modal').style.display = 'flex'; 
+        }
+
+        function resetToLoginState() {
+            tokenInputContainer.style.display = 'block';
+            viewToggleContainer.classList.add('hidden');
+            inboxView.classList.add('hidden');
+            calendarView.classList.add('hidden');
+            $('#controls-container').style.display = 'none';
+            $('#pagination-controls').classList.add('hidden');
+            $('#summary-section').style.display = 'none';
+            
+            accessToken = '';
+            fetchedEmails = [];
+            calendarEvents = [];
+            selectedEmails.clear();
+            localStorage.removeItem('graphApiAccessToken');
+            $('#accessTokenInput').value = '';
+            
+            $('#email-container').innerHTML = `<div id="initial-message" class="col-span-3 text-center text-gray-500 p-8"><p>Please enter your Graph API token to get started.</p></div>`;
+            $('#main-title').textContent = "AI Smart Assistant";
+        }
+
+        // --- API & AI CALLS (Simulated) ---
+        async function graphApiCall(endpoint, method = 'GET', body = null, headers = {}) {
+            const defaultHeaders = { 'Authorization': `Bearer ${accessToken}` };
+            if (method !== 'GET') { defaultHeaders['Content-Type'] = 'application/json'; }
+            try {
+                const response = await fetch(`${graphApiBaseEndpoint}${endpoint}`, { method, headers: { ...defaultHeaders, ...headers }, body: body ? JSON.stringify(body) : null });
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error.message || `HTTP error! status: ${response.status}`);
+                }
+                if (response.status === 204 || response.status === 202) return {}; // Handle No Content & Accepted
+                return response.json();
+            } catch (error) {
+                const errorMsg = (error.message || '').toLowerCase();
+                // Don't log handled errors like token expiry or send mail permissions
+                if (errorMsg.includes("access token has expired") || errorMsg.includes("token is expired")) {
+                    showFeedback("Session Expired", "Your token has expired. Please clear it and enter a new one.");
+                    resetToLoginState();
+                } else if (!errorMsg.includes('mail.send') && !errorMsg.includes('access is denied')) {
+                    // Log other, unexpected errors
+                    console.error('Graph API call failed:', error);
+                }
+                throw error;
+            }
+        }
+        async function callGemini(prompt, schema) {
+            const apiKey = ""; // Will be provided by the environment
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: schema,
+                },
+            };
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                throw new Error(`Gemini API failed with status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            
+            if (result.candidates && result.candidates.length > 0 && result.candidates[0].content?.parts?.[0]?.text) {
+                try {
+                    // The model returns a JSON string, so we parse it
+                    return JSON.parse(result.candidates[0].content.parts[0].text);
+                } catch (e) {
+                    console.error("Failed to parse Gemini JSON response:", e);
+                    throw new Error("Invalid JSON response from AI.");
+                }
+            } else {
+                console.error("Unexpected Gemini response structure:", result);
+                throw new Error("Could not get a valid response from the AI.");
+            }
+        }
+        async function getGeminiEmailCategoriesBulk(emails) {
+            await new Promise(r => setTimeout(r, 500)); // Simulate API call
+            const results = {};
+            const promotionalSenders = ['easemytrip', 'indigo', 'linkedin learning'];
+            emails.forEach(email => {
+                const subject = (email.subject || '').toLowerCase();
+                const body = (email.bodyPreview || '').toLowerCase();
+                const senderName = (email.from?.emailAddress?.name || '').toLowerCase();
+
+                if (subject.includes('urgent') || subject.includes('action required') || body.includes('asap')) {
+                    results[email.id] = 'Urgent';
+                } else if (promotionalSenders.some(sender => senderName.includes(sender)) || subject.includes('newsletter') || subject.includes('sale') || subject.includes('promo')) {
+                    results[email.id] = 'Promotional';
+                } else if (subject.includes('invoice') || subject.includes('receipt') || subject.includes('update')) {
+                    results[email.id] = 'High Priority';
+                } else {
+                    results[email.id] = 'General';
+                }
+            });
+            return results;
+        }
+        async function getGeminiSummaryBulk(emails) {
+             const emailsBySender = emails.reduce((acc, email) => {
+                const senderName = email.from.emailAddress.name;
+                if (!acc[senderName]) acc[senderName] = [];
+                acc[senderName].push(`Subject: ${email.subject}\nBody: ${email.bodyPreview}`);
+                return acc;
+            }, {});
+
+            const emailContentString = Object.entries(emailsBySender)
+                .map(([sender, contents]) => `START_SENDER: ${sender}\n${contents.join('\n---\n')}END_SENDER`)
+                .join('\n\n');
+
+            const prompt = `You are an AI assistant. Analyze the following batch of emails, which are grouped by sender. For each sender, provide a consolidated summary.
+            1. Extract the key points from all their emails combined.
+            2. Identify any specific action items required from the user.
+            
+            Your response must be a JSON object. The schema is:
+            {
+              "type": "OBJECT",
+              "properties": {
+                "summaryBySender": {
+                  "type": "ARRAY",
+                  "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                      "sender": { "type": "STRING" },
+                      "keyPoints": { "type": "ARRAY", "items": { "type": "STRING" } },
+                      "actionItems": { "type": "ARRAY", "items": { "type": "STRING" } }
+                    }
+                  }
+                }
+              }
+            }
+            
+            If there are no action items for a sender, return an empty array for "actionItems".
+            
+            Here are the emails:\n\n${emailContentString}`;
+            
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    "summaryBySender": {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                "sender": { "type": "STRING" },
+                                "keyPoints": { "type": "ARRAY", "items": { "type": "STRING" } },
+                                "actionItems": { "type": "ARRAY", "items": { "type": "STRING" } }
+                            }
+                        }
+                    }
+                }
+            };
+
+            try {
+                return await callGemini(prompt, schema);
+            } catch (e) {
+                 console.error(e);
+                 showFeedback("AI Error", "The AI assistant could not generate a summary at this time.");
+                 return null;
+            }
+        }
+        async function getAIDraftReply(email) {
+            const prompt = `You are a professional business assistant. Based on the email below, draft a concise and polite reply.
+    The reply should strictly follow this template:
+    1. The main body of the reply.
+    2. Exactly two line breaks (\n\n).
+    3. The signature exactly as follows, on two separate lines:
+    Best Regards,
+    [Your Name]
+    
+    Original Email Subject: ${email.subject}
+    Original Sender Name: ${email.from.emailAddress.name}
+    Original Email Body: ${email.bodyPreview}
+    
+    Draft a suitable reply, starting directly with the main body of the email. Do NOT include any salutation like "Hi" or "Hello".`;
+
+            const schema = {
+                type: "OBJECT",
+                properties: {
+                    "replyDraft": { "type": "STRING" }
+                }
+            };
+
+            try {
+                const result = await callGemini(prompt, schema);
+                return result.replyDraft;
+            } catch (e) {
+                console.error("AI draft reply failed:", e);
+                // Provide a fallback template on failure
+                return `\n\nBest Regards,\n[Your Name]\n\n---\nOn ${new Date(email.receivedDateTime).toLocaleString()}, ${email.from.emailAddress.name} wrote:\n>${email.bodyPreview.replace(/\n/g, '\n>')}`;
+            }
+        }
+        async function getAIMeetingPrep(event) {
+            const attendees = event.attendees.map(a => a.emailAddress.name).join(', ');
+            const prompt = `You are an AI meeting assistant. Based on the meeting details below, provide a brief preparation summary. Format the response as a single HTML string. Use '<strong>' tags for headings like 'Purpose', 'Key Discussion Points', and 'Attendees'. Add a '<br><br>' before each '<strong>' tag for spacing. Use '<ul>' and '<li>' for bullet points.
+            Meeting Subject: ${event.subject}
+            Meeting Body: ${event.body.content}
+            Attendees: ${attendees}`;
+            
+            const schema = { type: "OBJECT", properties: { "summary": { "type": "STRING" } } };
+
+            try {
+                const result = await callGemini(prompt, schema);
+                return { summary: result.summary };
+            } catch (e) {
+                console.error(e);
+                showFeedback("AI Error", "The AI assistant could not generate meeting prep notes at this time.");
+                return { summary: "Could not generate meeting prep notes." };
+            }
+        }
+        async function getAIDailyBriefing(events) {
+            const eventList = events.map(e => `- ${e.subject} at ${new Date(e.start.dateTime).toLocaleTimeString('en-IN', {timeZone: "Asia/Kolkata", hour: '2-digit', minute:'2-digit'})}`).join('\n');
+            const prompt = `You are an AI assistant. Analyze the following schedule for today (${new Date().toDateString()}) in the Asia/Kolkata timezone and provide a "Daily Briefing".
+            1. Start with a friendly, one-sentence overview of the day (e.g., "You have a busy day ahead!" or "Looks like a day for focused work.").
+            2. Under a '<strong>Key Meetings</strong>' heading, list the 2-3 most important meetings in a '<ul>'. Add a '<br><br>' before this heading.
+            3. Under a '<strong>Focus Time</strong>' heading, identify any significant open time slots (at least 1 hour) for focused work in a '<ul>'. Add a '<br><br>' before this heading.
+            4. Under a '<strong>Heads-Up</strong>' heading, mention any back-to-back meetings in a '<ul>'. Add a '<br><br>' before this heading.
+            Format the response as a single HTML string.
+            Today's events:\n${eventList}`;
+
+            const schema = { type: "OBJECT", properties: { "briefing": { "type": "STRING" } } };
+
+            try {
+                const result = await callGemini(prompt, schema);
+                return { briefing: result.briefing };
+            } catch (e) {
+                console.error(e);
+                showFeedback("AI Error", "The AI assistant could not generate a daily briefing at this time.");
+                return { briefing: "Could not generate a daily briefing at this time." };
+            }
+        }
+        async function getAIFindTime(events) {
+            const eventList = events.map(e => `- From ${new Date(e.start.dateTime).toLocaleTimeString('en-IN', {timeZone: "Asia/Kolkata", hour: '2-digit', minute:'2-digit'})} to ${new Date(e.end.dateTime).toLocaleTimeString('en-IN', {timeZone: "Asia/Kolkata", hour: '2-digit', minute:'2-digit'})}`).join('\n');
+            const prompt = `You are an AI assistant. Analyze the following schedule for today (${new Date().toDateString()}) in the Asia/Kolkata timezone and suggest open time slots for a new 1-hour meeting. Consider standard work hours from 9 AM to 6 PM.
+            1. Under a '<strong>Morning Slots (9am - 12pm)</strong>' heading, list available 1-hour slots in a '<ul>'.
+            2. Under a '<strong>Afternoon Slots (1pm - 6pm)</strong>' heading, list available 1-hour slots in a '<ul>'.
+            If there are no slots in a period, state "No available slots." under the relevant heading.
+            Format the response as a single HTML string.
+            Today's events:\n${eventList}`;
+            
+            const schema = { type: "OBJECT", properties: { "slots": { "type": "STRING" } } };
+
+            try {
+                const result = await callGemini(prompt, schema);
+                return { slots: result.slots };
+            } catch (e) {
+                console.error(e);
+                showFeedback("AI Error", "The AI assistant could not find open time slots at this moment.");
+                return { slots: "Could not find open time slots at this moment." };
+            }
+        }
+        async function getAIDraftReschedule(event) {
+             await new Promise(r => setTimeout(r, 1000)); // Simulate API call
+             return `Hi ${event.organizer.emailAddress.name},\n\nI hope you're well.\n\nI'm writing to request if we could possibly reschedule our meeting, "${event.subject}". Unfortunately, a conflict has come up that I'm unable to move.\n\nWould you be available sometime later this week? Please let me know what works best for you.\n\nApologies for any inconvenience.\n\nBest regards,`;
+        }
+        async function getGeminiEventCategoriesBulk(events) {
+            await new Promise(r => setTimeout(r, 1500)); // Simulate API call
+            const results = {};
+            const scrumKeywords = [
+                'dsm', 'stand up', 'stand-up', 'daily scrum', 'backlog grooming', 
+                'backlog refinement', 'sprint planning', 'sprint review', 
+                'sprint retrospective', 'sprint retro', 'wtk_sched', 'ukg daily',
+                'daily', 'standup', 'sprint', 'planning' // Keep original broader terms too
+            ];
+
+            events.forEach(event => {
+                if (event.isCancelled) {
+                    results[event.id] = 'Other';
+                    return; // Assign cancelled events to 'Other' and stop further checks
+                }
+
+                const subject = (event.subject || '').toLowerCase();
+                if (scrumKeywords.some(keyword => subject.includes(keyword))) {
+                    results[event.id] = 'ScrumCeremonies';
+                }
+                else if (subject.includes('important') || subject.includes('review') || subject.includes('1:1')) {
+                    results[event.id] = 'ImportantMeeting';
+                }
+                else {
+                    results[event.id] = 'General';
+                }
+            });
+            return results;
+        }
+
+        // --- INBOX LOGIC ---
+        async function fetchEmails() {
+            if (!accessToken) return;
+            fullscreenLoadingOverlay.style.display = 'flex';
+            loadingMessageEl.textContent = 'Fetching & Analyzing Emails...';
+            $('#controls-container').style.display = 'block';
+            try {
+                const data = await graphApiCall("/mailFolders/inbox/messages?$filter=isRead eq false&$top=100&$select=id,subject,from,receivedDateTime,bodyPreview,isRead,webLink,body,toRecipients,ccRecipients");
+                fetchedEmails = data.value;
+                const categoryMap = await getGeminiEmailCategoriesBulk(fetchedEmails);
+                fetchedEmails.forEach(e => { e.category = categoryMap[e.id] || 'Normal'; });
+                mainTitle.textContent = `AI Unread Inbox (${fetchedEmails.length})`;
+                populateSenderFilter();
+                renderInboxView();
+            } catch (error) {
+                showFeedback("Error", `Failed to fetch emails: ${error.message}`);
+                $('#email-container').innerHTML = `<div class="col-span-3 text-center text-gray-500 p-8"><h3>Oops!</h3><p>Could not fetch your emails. Please check your token and permissions.</p></div>`;
+            } finally {
+                fullscreenLoadingOverlay.style.display = 'none';
+            }
+        }
+        function getFilteredEmails() {
+            let emails = [...fetchedEmails];
+            if (currentFilter !== 'All') emails = emails.filter(e => e.category === currentFilter);
+            if (currentSenderFilter !== 'All') emails = emails.filter(e => e.from.emailAddress.name === currentSenderFilter);
+            if (currentSearchQuery) emails = emails.filter(e => e.subject.toLowerCase().includes(currentSearchQuery.toLowerCase()) || e.from.emailAddress.name.toLowerCase().includes(currentSearchQuery.toLowerCase()));
+            emails.sort((a, b) => currentSort === 'newest' ? new Date(b.receivedDateTime) - new Date(a.receivedDateTime) : new Date(a.receivedDateTime) - new Date(b.receivedDateTime));
+            return emails;
+        }
+        function updatePagination(totalItems) {
+            const paginationControls = $('#pagination-controls');
+            const emailCountInfo = $('#email-count-info');
+            const pageInfo = $('#page-info');
+            const prevBtn = $('#prev-page-btn');
+            const nextBtn = $('#next-page-btn');
+            
+            emailCountInfo.textContent = totalItems;
+            const totalPages = Math.ceil(totalItems / pageSize);
+
+            if (totalItems === 0) {
+                 paginationControls.classList.add('hidden');
+                 return;
+            }
+            
+            paginationControls.classList.remove('hidden');
+            pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+
+            if (totalPages <= 1) {
+                prevBtn.classList.add('hidden');
+                nextBtn.classList.add('hidden');
+            } else {
+                prevBtn.classList.remove('hidden');
+                nextBtn.classList.remove('hidden');
+            }
+
+            // Previous button logic
+            prevBtn.disabled = currentPage === 1;
+            
+            // Next button logic
+            nextBtn.disabled = currentPage === totalPages;
+        }
+        function updateBulkActionsBar() {
+            const bar = $('#bulk-actions-bar');
+            if (selectedEmails.size > 0 && !inboxView.classList.contains('hidden')) {
+                $('#selected-count').textContent = `${selectedEmails.size} selected`;
+                bar.classList.remove('hidden');
+            } else {
+                bar.classList.add('hidden');
+            }
+        }
+        function renderInboxView() {
+            const filteredEmails = getFilteredEmails();
+            const container = $('#email-container');
+            
+            updatePagination(filteredEmails.length);
+            updateBulkActionsBar();
+            
+            if (filteredEmails.length === 0) {
+                $('#inbox-message-container').classList.remove('hidden');
+                $('#inbox-message-container h3').textContent = "All Caught Up!";
+                $('#inbox-message-container p').textContent = "Your inbox is empty.";
+                container.innerHTML = '';
+                return;
+            }
+            $('#inbox-message-container').classList.add('hidden');
+
+            const startIndex = (currentPage - 1) * pageSize;
+            const endIndex = startIndex + pageSize;
+            const paginatedEmails = filteredEmails.slice(startIndex, endIndex);
+
+            container.innerHTML = paginatedEmails.map(email => `
+                <div class="relative bg-white p-4 rounded-2xl shadow-lg flex flex-col justify-between gap-4" data-id="${email.id}">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <p class="font-bold text-gray-800">${email.from.emailAddress.name}</p>
+                            <p class="text-sm text-gray-500">${email.subject || "No Subject"}</p>
+                        </div>
+                        <input type="checkbox" data-id="${email.id}" class="h-5 w-5 rounded text-indigo-600 focus:ring-indigo-500 border-gray-300 flex-shrink-0" ${selectedEmails.has(email.id) ? 'checked' : ''}>
+                    </div>
+                    <div class="flex flex-wrap gap-2 items-center justify-between text-xs text-gray-400 pt-2 border-t mt-auto">
+                        <span class="font-semibold text-white px-2 py-1 rounded-full text-xs" style="background-color: ${emailCategoryStyles[email.category]?.color || '#6b7280'};">${email.category}</span>
+                        <span>${new Date(email.receivedDateTime).toLocaleString()}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+        function renderEmailDetails(email) {
+            emailModal.style.display = 'flex';
+            $('#modal-content').innerHTML = `
+                <h3 class="text-2xl font-bold mb-2">${email.subject}</h3>
+                <p class="text-sm text-gray-600"><strong>From:</strong> ${email.from.emailAddress.name} &lt;${email.from.emailAddress.address}&gt;</p>
+                <p class="text-sm text-gray-600 mb-4"><strong>Received:</strong> ${new Date(email.receivedDateTime).toLocaleString()}</p>
+                <div class="prose max-w-none text-gray-700 p-4 mt-2 bg-gray-50 rounded-lg max-h-60 overflow-y-auto">${email.body.content}</div>
+                <div id="inline-summary-container" class="mt-4 hidden">
+                    <h4 class="text-lg font-bold text-gray-800 mb-2">AI Summary</h4>
+                    <div id="inline-summary-content" class="p-4 bg-indigo-50 rounded-lg text-sm prose max-w-full"></div>
+                </div>
+                 <div class="mt-6 flex flex-wrap gap-2 justify-center" data-id="${email.id}">
+                    <button class="email-action-btn bg-indigo-100 text-indigo-800" data-action="summarize-inline">✨ Quick Summary</button>
+                    <button class="email-action-btn bg-blue-100 text-blue-800" data-action="reply">↩️ Reply</button>
+                    <button class="email-action-btn bg-gray-100 text-gray-800" data-action="read">✔️ Mark as Read</button>
+                    <button class="email-action-btn bg-green-100 text-green-800" data-action="archive">🗄️ Archive</button>
+                    <button class="email-action-btn bg-red-100 text-red-800" data-action="delete">🗑️ Delete</button>
+                </div>
+            `;
+        }
+        async function performEmailAction(action, emailIds) {
+            fullscreenLoadingOverlay.style.display = 'flex';
+            loadingMessageEl.textContent = 'Performing action...';
+            try {
+                const requests = emailIds.map(id => {
+                    let endpoint = `/messages/${id}`;
+                    let body = {};
+                    let method = 'PATCH'; // Default for 'read'
+
+                    if (action === 'read') {
+                        body.isRead = true;
+                    } else if (action === 'archive') {
+                        method = 'POST';
+                        endpoint += '/move';
+                        body.destinationId = 'archive';
+                    } else if (action === 'delete') {
+                        method = 'POST';
+                        endpoint += '/move';
+                        body.destinationId = 'deleteditems'; // Soft delete
+                    }
+                    return graphApiCall(endpoint, method, body);
+                });
+                await Promise.all(requests);
+                
+                // Show success message
+                let successMessage = '';
+                const count = emailIds.length;
+                const plural = count > 1 ? 's' : '';
+                if (action === 'read') successMessage = `${count} email${plural} marked as read.`;
+                if (action === 'archive') successMessage = `${count} email${plural} archived.`;
+                if (action === 'delete') successMessage = `${count} email${plural} moved to Deleted Items.`;
+                if (successMessage) showFeedback('Success', successMessage);
+
+                fetchedEmails = fetchedEmails.filter(e => !emailIds.includes(e.id));
+                selectedEmails.clear();
+                renderInboxView();
+            } catch (error) {
+                showFeedback("Error", `Could not perform action: ${error.message}`);
+            } finally {
+                fullscreenLoadingOverlay.style.display = 'none';
+            }
+        }
+        async function handleSummary(emailIds, isInline = false) {
+            fullscreenLoadingOverlay.style.display = 'flex';
+            loadingMessageEl.textContent = 'Generating AI Summary...';
+            try {
+                const emailsToSummarize = fetchedEmails.filter(e => emailIds.includes(e.id));
+                const result = await getGeminiSummaryBulk(emailsToSummarize);
+                
+                if (!result || !result.summaryBySender) {
+                    throw new Error("Invalid summary format received from AI.");
+                }
+
+                if (isInline) {
+                    // Special formatting for Quick Summary (single email)
+                    const summary = result.summaryBySender[0];
+                    let inlineSummaryHtml = '';
+                     if (summary.keyPoints && summary.keyPoints.length > 0) {
+                        inlineSummaryHtml += `<ul>${summary.keyPoints.map(p => `<li>${p}</li>`).join('')}</ul>`;
+                    }
+                    if (summary.actionItems && summary.actionItems.length > 0) {
+                        inlineSummaryHtml += `<br><strong>Action Items:</strong><ul>${summary.actionItems.map(a => `<li>${a}</li>`).join('')}</ul>`;
+                    } else {
+                        inlineSummaryHtml += `<br><p>No action required.</p>`;
+                    }
+                    $('#inline-summary-container').style.display = 'block';
+                    $('#inline-summary-content').innerHTML = inlineSummaryHtml;
+
+                } else {
+                    // Standard formatting for Bulk Summary
+                    let summaryHtml = result.summaryBySender.map(summary => {
+                        let senderHtml = `<div class="sender-summary" data-sender="${summary.sender}"><strong>${summary.sender}:</strong>`;
+                        if (summary.keyPoints && summary.keyPoints.length > 0) {
+                            senderHtml += `<ul>${summary.keyPoints.map(p => `<li>${p}</li>`).join('')}</ul>`;
+                        }
+                        if (summary.actionItems && summary.actionItems.length > 0) {
+                            senderHtml += `<br><strong>Action Items:</strong><ul>${summary.actionItems.map(a => `<li>${a}</li>`).join('')}</ul>`;
+                        } else {
+                            senderHtml += `<br><p>No action required.</p>`;
+                        }
+                        return senderHtml + `</div>`;
+                    }).join('');
+
+                    $('#summary-section').style.display = 'block';
+                    $('#summary-content').innerHTML = summaryHtml;
+                    $('#summary-section').scrollIntoView({ behavior: 'smooth' });
+
+                    // Populate the summary-specific sender filter
+                    const uniqueSenders = [...new Set(emailsToSummarize.map(e => e.from.emailAddress.name))];
+                    const summarySenderFilter = $('#summary-sender-filter');
+                    summarySenderFilter.innerHTML = '<option value="All">All Senders</option>';
+                    uniqueSenders.sort().forEach(sender => {
+                        const option = document.createElement('option');
+                        option.value = sender;
+                        option.textContent = sender;
+                        summarySenderFilter.appendChild(option);
+                    });
+                    summarySenderFilter.value = 'All'; // Reset filter to "All"
+                }
+            } catch (error) {
+                console.error("Summary handle error:", error);
+                showFeedback("AI Error", "Could not generate summary. " + error.message);
+            } finally {
+                fullscreenLoadingOverlay.style.display = 'none';
+            }
+        }
+        async function openReplyModal(email = null) {
+            replyModal.style.display = 'flex';
+            const isReply = !!email;
+            $('#reply-modal-title').textContent = isReply ? 'Reply To Email' : 'Compose New Email';
+            const replyBody = $('#reply-body');
+            const loadingOverlay = $('#reply-loading-overlay');
+
+            if (isReply) {
+                $('#reply-to').value = email.from.emailAddress.address;
+                $('#reply-cc').value = email.ccRecipients.map(r => r.emailAddress.address).join(', ');
+                $('#reply-subject').value = `Re: ${email.subject}`;
+                
+                // Show loading state
+                replyBody.value = ''; // Clear previous content
+                loadingOverlay.style.display = 'flex';
+
+                // Get AI draft
+                const draft = await getAIDraftReply(email);
+                
+                // Hide loading state and populate textarea
+                loadingOverlay.style.display = 'none';
+                replyBody.value = draft;
+                
+            } else {
+                // Handle new compose
+                $('#reply-to').value = '';
+                $('#reply-cc').value = '';
+                $('#reply-subject').value = '';
+                replyBody.value = '';
+                loadingOverlay.style.display = 'none';
+            }
+        }
+        async function sendEmail() {
+            // --- VALIDATION START ---
+            const to = $('#reply-to').value.trim();
+            const subject = $('#reply-subject').value.trim();
+            const body = $('#reply-body').value.trim();
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+            if (!to) {
+                showFeedback("Validation Error", "The 'To' field cannot be empty.");
+                return;
+            }
+            if (!emailRegex.test(to)) {
+                showFeedback("Validation Error", "Please enter a valid email address in the 'To' field.");
+                return;
+            }
+            if (!subject) {
+                showFeedback("Validation Error", "The 'Subject' field cannot be empty.");
+                return;
+            }
+            if (!body) {
+                showFeedback("Validation Error", "The email 'Body' cannot be empty.");
+                return;
+            }
+            // --- VALIDATION END ---
+
+            fullscreenLoadingOverlay.style.display = 'flex';
+            loadingMessageEl.textContent = 'Sending email...';
+            try {
+                const message = {
+                    subject: subject,
+                    body: { contentType: 'Text', content: body },
+                    toRecipients: [{ emailAddress: { address: to } }],
+                    ccRecipients: $('#reply-cc').value ? [{ emailAddress: { address: $('#reply-cc').value.trim() } }] : []
+                };
+                await graphApiCall('/sendMail', 'POST', { message, saveToSentItems: 'true' });
+                showFeedback("Success", "Email sent successfully!");
+                replyModal.style.display = 'none';
+            } catch(error) {
+                 if (error.message && (error.message.toLowerCase().includes('mail.send') || error.message.toLowerCase().includes('access is denied'))) {
+                    showFeedback("Access Denied", "The provided token does not have the necessary 'Mail.Send' permission to send emails. Please ensure your token has the correct scopes.");
+                 } else {
+                    showFeedback("Error", `Failed to send email: ${error.message}`);
+                 }
+            } finally {
+                fullscreenLoadingOverlay.style.display = 'none';
+            }
+        }
+
+        // --- INBOX HELPERS ---
+        function showConfirmationModal(title, message, confirmCallback) {
+            $('#confirmation-title').textContent = title;
+            $('#confirmation-message').textContent = message;
+            
+            const confirmBtn = $('#confirm-btn');
+            const newConfirmBtn = confirmBtn.cloneNode(true); // Clone to remove old listeners
+            confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+            newConfirmBtn.onclick = () => {
+                $('#confirmation-modal').style.display = 'none';
+                confirmCallback();
+            };
+
+            $('#cancel-btn').onclick = () => {
+                $('#confirmation-modal').style.display = 'none';
+            };
+            
+            $('#confirmation-modal').style.display = 'flex';
+        }
+        function populateSenderFilter() {
+            const senderFilter = $('#sender-filter');
+            const senders = [...new Set(fetchedEmails.map(e => e.from.emailAddress.name))];
+            const currentSelection = senderFilter.value;
+            senderFilter.innerHTML = '<option value="All">All Senders</option>'; 
+            senders.sort().forEach(sender => {
+                const option = document.createElement('option');
+                option.value = sender;
+                option.textContent = sender;
+                senderFilter.appendChild(option);
+            });
+            senderFilter.value = currentSelection;
+        }
+
+         // --- CALENDAR LOGIC ---
+         async function getTodaysEvents() {
+            const today = new Date();
+            const todayString = today.toDateString();
+            
+            // Check if today's events are already in the main calendar view
+            const eventsInView = calendarEvents.filter(e => new Date(e.start.dateTime).toDateString() === todayString);
+            if (eventsInView.length > 0) {
+                return eventsInView;
+            }
+
+            // If not, fetch specifically for today
+            fullscreenLoadingOverlay.style.display = 'flex';
+            loadingMessageEl.textContent = 'Fetching today\'s schedule...';
+            const start = new Date(); start.setHours(0, 0, 0, 0);
+            const end = new Date(); end.setHours(23, 59, 59, 999);
+
+            try {
+                const headers = { 'Prefer': 'outlook.timezone="India Standard Time"' };
+                // Fetch more details for AI analysis
+                const data = await graphApiCall(`/calendarView?startDateTime=${start.toISOString()}&endDateTime=${end.toISOString()}&$top=100&$select=id,subject,start,end,body,attendees`, 'GET', null, headers);
+                return data.value;
+            } catch (error) {
+                showFeedback("Error", "Could not fetch today's schedule for the AI feature.");
+                return []; // Return empty array on failure
+            } finally {
+                fullscreenLoadingOverlay.style.display = 'none';
+            }
+        }
+        async function respondToEvent(eventId, action) {
+            fullscreenLoadingOverlay.style.display = 'flex';
+            loadingMessageEl.textContent = 'Sending Response...';
+            try {
+                const endpoint = `/events/${eventId}/${action}`;
+                await graphApiCall(endpoint, 'POST', { comment: 'Response sent via AI Assistant' });
+                showFeedback("Success", `Meeting ${action}ed successfully.`);
+                eventModal.style.display = 'none';
+                fetchCalendarEvents(); // Refresh to show updated status
+            } catch (error) {
+                showFeedback("Error", `Failed to respond to event: ${error.message}`);
+            } finally {
+                fullscreenLoadingOverlay.style.display = 'none';
+            }
+        }
+        async function handleProposeNewTime(event) {
+            fullscreenLoadingOverlay.style.display = 'flex';
+            loadingMessageEl.textContent = 'Drafting Reschedule Email...';
+            try {
+                const draft = await getAIDraftReschedule(event);
+                eventModal.style.display = 'none';
+                openReplyModal({
+                    from: { emailAddress: { address: event.organizer.emailAddress.address } },
+                    subject: `Re: ${event.subject}`,
+                    bodyPreview: draft,
+                    receivedDateTime: new Date().toISOString(),
+                    ccRecipients: []
+                });
+                $('#reply-body').value = draft;
+            } catch (error) {
+                showFeedback("AI Error", "Could not draft reschedule email.");
+            } finally {
+                fullscreenLoadingOverlay.style.display = 'none';
+            }
+        }
+        async function fetchCalendarEvents() {
+            if (!accessToken) return;
+            fullscreenLoadingOverlay.style.display = 'flex'; loadingMessageEl.textContent = 'Fetching & Analyzing Calendar...';
+            let start, end;
+            const d = new Date(currentCalendarDate);
+
+            if (currentCalendarViewMode === 'week') {
+                const dayOfWeek = d.getDay();
+                start = new Date(d);
+                start.setDate(d.getDate() - dayOfWeek);
+                start.setHours(0, 0, 0, 0);
+
+                end = new Date(start);
+                end.setDate(start.getDate() + 6);
+                end.setHours(23, 59, 59, 999);
+            } else { // month view
+                start = new Date(d.getFullYear(), d.getMonth(), 1);
+                end = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+            }
+            
+            try {
+                const headers = { 'Prefer': 'outlook.timezone="India Standard Time"' };
+                const data = await graphApiCall(`/calendarView?startDateTime=${start.toISOString()}&endDateTime=${end.toISOString()}&$top=250&$select=id,subject,body,bodyPreview,start,end,organizer,attendees,isCancelled,responseStatus,location`, 'GET', null, headers);
+                
+                calendarEvents = data.value;
+                const categoryMap = await getGeminiEventCategoriesBulk(calendarEvents);
+                calendarEvents.forEach(e => e.category = categoryMap[e.id] || 'Other');
+                renderCalendar();
+
+            } catch (error) { 
+                showFeedback("Error", `Failed to fetch calendar: ${error.message}`); 
+            } 
+            finally { fullscreenLoadingOverlay.style.display = 'none'; }
+        }
+        function renderCalendar() {
+            const d = new Date(currentCalendarDate);
+            const filterContainer = $('#calendar-filter-container');
+            if (!filterContainer.innerHTML) {
+                filterContainer.innerHTML = `<button class="calendar-filter-btn active" data-filter="All">All</button>` + Object.keys(eventCategories).map(cat => `<button class="calendar-filter-btn" data-filter="${cat}">${cat.replace(/([A-Z])/g, ' $1').trim()}</button>`).join('');
+            }
+            
+            $$('.calendar-filter-btn').forEach(btn => {
+                const category = btn.dataset.filter;
+                if (btn.classList.contains('active') && category !== 'All' && eventCategories[category]) {
+                    btn.style.backgroundColor = eventCategories[category].color;
+                    btn.style.color = 'white';
+                } else if(btn.classList.contains('active') && category === 'All') {
+                    btn.style.backgroundColor = '#4f46e5';
+                    btn.style.color = 'white';
+                } else {
+                    btn.style.backgroundColor = '';
+                    btn.style.color = '';
+                }
+            });
+
+            let eventsToRender = (currentCalendarFilter === 'All') ? [...calendarEvents] : calendarEvents.filter(e => e.category === currentCalendarFilter);
+            
+            if (currentCalendarViewMode === 'week') {
+                const weekStart = new Date(d);
+                weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+                const weekEnd = new Date(weekStart);
+                weekEnd.setDate(weekStart.getDate() + 6);
+                calendarTitleText.textContent = `${weekStart.toLocaleDateString('en-US', {month: 'short', day: 'numeric'})} - ${weekEnd.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}`;
+                renderWeekView(eventsToRender);
+            } else {
+                calendarTitleText.textContent = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                renderMonthView(eventsToRender);
+            }
+        }
+        function renderMonthView(events) {
+            const year = currentCalendarDate.getFullYear(), month = currentCalendarDate.getMonth();
+            const firstDay = new Date(year, month, 1).getDay(), daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            let html = '<div class="month-view-scroll-container"><div class="calendar-grid">';
+            
+            // Add sticky headers as the first row of the grid
+            ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(day => {
+                html += `<div class="calendar-day-header">${day}</div>`;
+            });
+
+            // Add blank cells for alignment
+            for (let i = 0; i < firstDay; i++) {
+                html += '<div class="calendar-day other-month"></div>';
+            }
+
+            // Add date cells
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month, day);
+                const dayEvents = events.filter(e => new Date(e.start.dateTime).toDateString() === date.toDateString());
+                dayEvents.sort((a, b) => new Date(a.start.dateTime) - new Date(b.start.dateTime));
+                for (let i = 0; i < dayEvents.length; i++) {
+                    dayEvents[i].isConflicting = false;
+                    for (let j = i + 1; j < dayEvents.length; j++) {
+                        if (new Date(dayEvents[i].end.dateTime) > new Date(dayEvents[j].start.dateTime)) {
+                            dayEvents[i].isConflicting = true;
+                            dayEvents[j].isConflicting = true;
+                        }
+                    }
+                }
+                html += `<div class="calendar-day ${date.toDateString() === new Date().toDateString() ? 'today' : ''}"><div class="day-number">${day}</div>`;
+                dayEvents.forEach(e => { html += `<div class="calendar-event ${eventCategories[e.category]?.class} ${e.isConflicting ? 'conflict' : ''}" data-id="${e.id}">${e.subject}</div>`; });
+                html += `</div>`;
+            }
+            html += '</div></div>'; // Close grid and scroll-container
+            calendarContainer.innerHTML = html;
+        }
+        function processDayEventsForLayout(dayEvents) {
+            if (!dayEvents || dayEvents.length === 0) return;
+            dayEvents.sort((a, b) => new Date(a.start.dateTime) - new Date(b.start.dateTime) || new Date(b.end.dateTime) - new Date(a.end.dateTime));
+            
+            dayEvents.forEach(event => { event.layout = null; event.isConflicting = false; });
+
+            const processGroup = (group) => {
+                group.forEach(event => event.isConflicting = group.length > 1);
+                
+                let columns = [];
+                group.forEach(event => {
+                    let placed = false;
+                    for (let i = 0; i < columns.length; i++) {
+                        if (columns[i].every(e => new Date(e.end.dateTime) <= new Date(event.start.dateTime))) {
+                            columns[i].push(event);
+                            event.layout = { col: i };
+                            placed = true;
+                            break;
+                        }
+                    }
+                    if (!placed) {
+                        columns.push([event]);
+                        event.layout = { col: columns.length - 1 };
+                    }
+                });
+
+                group.forEach(event => {
+                    event.layout.numCols = columns.length;
+                    event.layout.width = 100 / event.layout.numCols;
+                    event.layout.left = event.layout.col * event.layout.width;
+                });
+            };
+
+            let i = 0;
+            while (i < dayEvents.length) {
+                let currentGroup = [dayEvents[i]];
+                let groupEndTime = new Date(dayEvents[i].end.dateTime);
+                
+                for (let j = i + 1; j < dayEvents.length; j++) {
+                    if (new Date(dayEvents[j].start.dateTime) < groupEndTime) {
+                        currentGroup.push(dayEvents[j]);
+                        groupEndTime = new Date(Math.max(groupEndTime, new Date(dayEvents[j].end.dateTime)));
+                    }
+                }
+                processGroup(currentGroup);
+                i += currentGroup.length;
+            }
+        }
+        function renderWeekView(events) {
+            const categoryIcons = {
+                ImportantMeeting: `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>`,
+                ScrumCeremonies: `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" /></svg>`,
+                General: `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clip-rule="evenodd" /></svg>`,
+                Other: `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><circle cx="10" cy="10" r="3" /></svg>`,
+            };
+            const locationIcon = `<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" /></svg>`;
+
+            const weekStart = new Date(currentCalendarDate);
+            weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+            
+            let headerHtml = `<div class="week-view-header-wrapper"><div class="time-column-header"></div><div class="day-headers-container">`;
+             for (let i = 0; i < 7; i++) {
+                const day = new Date(weekStart);
+                day.setDate(day.getDate() + i);
+                const isToday = day.toDateString() === new Date().toDateString();
+                headerHtml += `<div class="day-column-header ${isToday ? 'today' : ''}">
+                                <div class="font-bold">${day.toLocaleDateString('en-US', {weekday: 'short'})}</div>
+                                <div>${day.getDate()}</div>
+                             </div>`;
+            }
+            headerHtml += `</div></div>`;
+
+            let contentHtml = '<div class="week-view-scroll-container"><div class="week-view-wrapper">';
+            
+            // Time Column
+            contentHtml += '<div class="time-column">';
+            for (let hour = 0; hour < 24; hour++) {
+                const displayHour = hour === 0 ? '12 AM' : hour < 12 ? `${hour} AM` : hour === 12 ? '12 PM' : `${hour-12} PM`;
+                contentHtml += `<div class="time-slot">${displayHour}</div>`;
+            }
+            contentHtml += '</div>';
+
+            // Day Columns
+            contentHtml += '<div class="day-columns-container">';
+            for (let i = 0; i < 7; i++) {
+                const day = new Date(weekStart);
+                day.setDate(day.getDate() + i);
+
+                contentHtml += `<div class="day-column" data-date="${day.toISOString()}"><div class="day-events-container">`;
+                const dayEvents = events.filter(e => new Date(e.start.dateTime).toDateString() === day.toDateString());
+                processDayEventsForLayout(dayEvents);
+                
+                dayEvents.forEach(event => {
+                    const start = new Date(event.start.dateTime);
+                    const end = new Date(event.end.dateTime);
+                    const startMinutes = start.getHours() * 60 + start.getMinutes();
+                    const endMinutes = end.getHours() * 60 + end.getMinutes();
+                    const duration = Math.max(30, endMinutes - startMinutes); // min 30 min height
+
+                    const top = (startMinutes / 60) * 60; // 60px per hour
+                    const height = (duration / 60) * 60;
+
+                    const category = eventCategories[event.category] || eventCategories['Other'];
+                    const layout = event.layout || { left: 0, width: 100 };
+
+                    contentHtml += `<div class="week-event calendar-event ${category.class} ${event.isConflicting ? 'conflict' : ''}" data-id="${event.id}" 
+                                style="top: ${top}px; height: ${height}px; left: ${layout.left}%; width: calc(${layout.width}% - 4px); background-color: ${category.color}20; border-color: ${category.color};">
+                                <div class="flex items-start justify-between gap-1">
+                                    <p class="font-bold text-xs flex-grow truncate">${event.subject}</p>
+                                    <div class="flex-shrink-0" style="color: ${category.color}">${categoryIcons[event.category] || categoryIcons['Other']}</div>
+                                </div>
+                                <p class="text-xs text-gray-600">${start.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - ${end.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                                ${event.location && event.location.displayName ? `
+                                    <div class="flex items-center gap-1 text-xs text-gray-600 mt-1 truncate">
+                                        ${locationIcon}
+                                        <span>${event.location.displayName}</span>
+                                    </div>
+                                ` : ''}
+                            </div>`;
+                });
+
+                if (day.toDateString() === new Date().toDateString()) {
+                    const now = new Date();
+                    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+                    const top = (nowMinutes / 60) * 60;
+                    contentHtml += `<div class="now-indicator" style="top: ${top}px;"></div>`;
+                }
+
+                contentHtml += `</div></div>`; // Close day-events-container and day-column
+            }
+            contentHtml += '</div></div></div>'; // Close day-columns-container, week-view-wrapper, scroll container
+            
+            calendarContainer.innerHTML = headerHtml + contentHtml;
+            
+            const scrollContainer = $('.week-view-scroll-container');
+            if (scrollContainer) { scrollContainer.scrollTop = 9 * 60; }
+        }
+        function renderEventDetails(event) {
+            eventModal.style.display = 'flex';
+            const eventContent = $('#event-modal-content');
+            const eventLocaleTimeString = (dateStr) => new Date(dateStr).toLocaleString([], { hour12: true, hour: 'numeric', minute: '2-digit' });
+
+            let actionButtonsHtml = '';
+            if (event.responseStatus.response === 'notResponded') {
+                 actionButtonsHtml = `
+                    <button class="event-action-btn bg-green-100 text-green-800" data-action="accept">✔️ Accept</button>
+                    <button class="event-action-btn bg-red-100 text-red-800" data-action="decline">❌ Decline</button>`;
+            }
+            if (event.isConflicting) {
+                 actionButtonsHtml += `<button class="event-action-btn bg-yellow-100 text-yellow-800" data-action="propose-new-time">🗓️ Propose New Time</button>`;
+            }
+
+            eventContent.innerHTML = `
+                <h3 class="text-xl font-bold">${event.subject}</h3>
+                <p class="text-sm text-gray-500 mb-2">${eventLocaleTimeString(event.start.dateTime)} - ${eventLocaleTimeString(event.end.dateTime)}</p>
+                <div class="prose max-w-none text-gray-700 p-4 mt-2 bg-gray-50 rounded-lg max-h-40 overflow-y-auto">${event.body.content}</div>
+                <div id="ai-prep-section" class="mt-4">
+                    <button id="generate-ai-prep" class="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl flex items-center justify-center gap-2">
+                        ✨ <span>Get AI Meeting Prep</span>
+                    </button>
+                    <div id="ai-prep-content" class="mt-4 p-4 bg-indigo-50 rounded-lg hidden prose max-w-full"></div>
+                </div>
+                <div class="mt-6 flex flex-wrap gap-2 justify-center" data-id="${event.id}">${actionButtonsHtml}</div>
+            `;
+            $('#generate-ai-prep').onclick = async () => {
+                fullscreenLoadingOverlay.style.display = 'flex';
+                loadingMessageEl.textContent = 'Generating meeting prep...';
+                try {
+                    const prepNotes = await getAIMeetingPrep(event);
+                    $('#ai-prep-content').innerHTML = prepNotes.summary;
+                    $('#ai-prep-content').style.display = 'block';
+                    $('#generate-ai-prep').style.display = 'none';
+                } catch(e) {
+                    showFeedback("AI Error", "Could not generate meeting prep notes.");
+                } finally {
+                    fullscreenLoadingOverlay.style.display = 'none';
+                }
+            };
+        }
+        
+        // --- INITIALIZATION & EVENT LISTENERS ---
+        function initializeApp() { 
+            const storedToken = localStorage.getItem('graphApiAccessToken'); 
+            if (storedToken) { 
+                accessToken = storedToken; 
+                tokenInputContainer.style.display = 'none';
+                viewToggleContainer.classList.remove('hidden');
+                inboxView.classList.remove('hidden');
+                fetchEmails(); 
+            } else { 
+                resetToLoginState();
+            } 
+            
+            $('#prev-page-btn').onclick = () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    renderInboxView();
+                }
+            };
+
+            $('#next-page-btn').onclick = () => {
+                const totalPages = Math.ceil(getFilteredEmails().length / pageSize);
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    renderInboxView();
+                }
+            };
+        }
+        
+        document.addEventListener('click', e => {
+            const target = e.target;
+            const emailCard = target.closest('#email-container .relative');
+            const emailActionBtn = target.closest('.email-action-btn');
+            const bulkActionBtn = target.closest('#bulk-actions-bar button');
+            const calendarEventEl = target.closest('.calendar-event');
+            const calendarFilterBtn = target.closest('.calendar-filter-btn');
+            const eventActionBtn = target.closest('.event-action-btn');
+            const clearTokenBtn = target.closest('#clearTokenBtn');
+            const saveTokenBtn = target.closest('#saveTokenBtn');
+            const dailyBriefingBtn = target.closest('#daily-briefing-btn');
+            const findTimeBtn = target.closest('#ai-find-time-btn');
+
+            if (emailCard && target.type !== 'checkbox') renderEmailDetails(fetchedEmails.find(em => em.id === emailCard.dataset.id));
+            if (emailActionBtn) {
+                const action = emailActionBtn.dataset.action;
+                const emailId = emailActionBtn.parentElement.dataset.id;
+                
+                if (action === 'summarize-inline') {
+                    handleSummary([emailId], true);
+                } else if (action === 'reply') {
+                    emailModal.style.display = 'none';
+                    openReplyModal(fetchedEmails.find(em => em.id === emailId));
+                } else {
+                    // For actions that close the modal
+                    emailModal.style.display = 'none';
+                    if (action === 'archive') {
+                        showConfirmationModal(
+                            'Confirm Archive',
+                            'Are you sure you want to archive this email?',
+                            () => performEmailAction(action, [emailId])
+                        );
+                    } else if (action === 'delete') {
+                         showConfirmationModal(
+                            'Confirm Deletion',
+                            'This will move the email to your Deleted Items folder.',
+                            () => performEmailAction(action, [emailId])
+                        );
+                    } else if (action === 'read') {
+                        performEmailAction(action, [emailId]);
+                    }
+                }
+            }
+            if (bulkActionBtn) {
+                const action = bulkActionBtn.dataset.action;
+                if (action === 'close') {
+                    selectedEmails.clear();
+                    renderInboxView();
+                    return;
+                }
+                
+                if (action === 'summarize') return handleSummary([...selectedEmails]);
+
+                if (action === 'archive') {
+                    showConfirmationModal(
+                        `Archive ${selectedEmails.size} emails?`,
+                        'Are you sure you want to archive all selected emails?',
+                        () => performEmailAction(action, [...selectedEmails])
+                    );
+                } else if (action === 'delete') {
+                    showConfirmationModal(
+                        `Delete ${selectedEmails.size} emails?`,
+                        'This will move all selected emails to your Deleted Items folder.',
+                        () => performEmailAction(action, [...selectedEmails])
+                    );
+                } else {
+                     performEmailAction(action, [...selectedEmails]);
+                }
+            }
+            if(calendarEventEl) {
+                const event = calendarEvents.find(ev => ev.id === calendarEventEl.dataset.id);
+                if(event) renderEventDetails(event);
+            }
+            if(calendarFilterBtn) {
+                $$('.calendar-filter-btn.active').forEach(b => b.classList.remove('active'));
+                calendarFilterBtn.classList.add('active');
+                currentCalendarFilter = calendarFilterBtn.dataset.filter;
+                renderCalendar();
+            }
+            if (eventActionBtn) {
+                const action = eventActionBtn.dataset.action;
+                const eventId = eventActionBtn.parentElement.dataset.id;
+                const event = calendarEvents.find(e => e.id === eventId);
+                if (action === 'propose-new-time') {
+                    handleProposeNewTime(event);
+                } else {
+                    respondToEvent(eventId, action);
+                }
+            }
+            if(clearTokenBtn) resetToLoginState();
+            if(saveTokenBtn) {
+                accessToken = $('#accessTokenInput').value.trim(); 
+                if (!accessToken) {
+                    showFeedback("Validation Error", "The Access Token field cannot be empty.");
+                    return;
+                }
+                localStorage.setItem('graphApiAccessToken', accessToken); 
+                tokenInputContainer.style.display = 'none';
+                viewToggleContainer.classList.remove('hidden');
+                inboxView.classList.remove('hidden');
+                fetchEmails(); 
+            }
+            if(dailyBriefingBtn) {
+                fullscreenLoadingOverlay.style.display = 'flex';
+                loadingMessageEl.textContent = 'Generating your daily briefing...';
+                
+                getTodaysEvents().then(todayEvents => {
+                    if (todayEvents.length === 0) {
+                        fullscreenLoadingOverlay.style.display = 'none';
+                        showFeedback("Daily Briefing", "You have no meetings scheduled for today.");
+                        return;
+                    }
+
+                    getAIDailyBriefing(todayEvents).then(briefing => {
+                        const briefingModal = $('#briefing-modal');
+                        $('#briefing-title').textContent = "Your AI Daily Briefing";
+                        $('#briefing-content').innerHTML = briefing.briefing;
+                        briefingModal.style.display = 'flex';
+                    }).finally(() => {
+                        fullscreenLoadingOverlay.style.display = 'none';
+                    });
+                });
+            }
+             if(findTimeBtn) {
+                fullscreenLoadingOverlay.style.display = 'flex';
+                loadingMessageEl.textContent = 'Finding open slots...';
+                
+                getTodaysEvents().then(todayEvents => {
+                    getAIFindTime(todayEvents).then(result => {
+                        const briefingModal = $('#briefing-modal');
+                        $('#briefing-title').textContent = "Available Time Slots for Today";
+                        $('#briefing-content').innerHTML = result.slots;
+                        briefingModal.style.display = 'flex';
+                    }).finally(() => {
+                        fullscreenLoadingOverlay.style.display = 'none';
+                    });
+                });
+            }
+        });
+
+        $('#email-container').addEventListener('change', e => { if (e.target.type === 'checkbox') { e.target.checked ? selectedEmails.add(e.target.dataset.id) : selectedEmails.delete(e.target.dataset.id); updateBulkActionsBar(); } });
+
+        $('#inbox-view-btn').onclick = () => { inboxView.classList.remove('hidden'); calendarView.classList.add('hidden'); mainTitle.textContent = `AI Unread Inbox (${fetchedEmails.length})`; $('.view-toggle-btn.active').classList.remove('active'); $('#inbox-view-btn').classList.add('active'); updateBulkActionsBar(); };
+        $('#calendar-view-btn').onclick = () => { inboxView.classList.add('hidden'); calendarView.classList.remove('hidden'); mainTitle.textContent = "AI Calendar"; $('.view-toggle-btn.active').classList.remove('active'); $('#calendar-view-btn').classList.add('active'); if (!calendarEvents.length) fetchCalendarEvents(); };
+        
+        $('#month-view-mode-btn').onclick = () => { currentCalendarViewMode = 'month'; $$('.calendar-view-mode-btn.active').forEach(b => b.classList.remove('active')); $('#month-view-mode-btn').classList.add('active'); fetchCalendarEvents(); };
+        $('#week-view-mode-btn').onclick = () => { currentCalendarViewMode = 'week'; $$('.calendar-view-mode-btn.active').forEach(b => b.classList.remove('active')); $('#week-view-mode-btn').classList.add('active'); fetchCalendarEvents(); };
+
+        $('#refreshBtn').onclick = fetchEmails;
+        $('#composeBtn').onclick = () => openReplyModal();
+        $('#send-reply-btn').onclick = sendEmail;
+        $('#summarizeAllBtn').onclick = () => { const filtered = getFilteredEmails(); if (filtered.length > 0) handleSummary(filtered.map(e => e.id)); else showFeedback("Nothing to Summarize", "There are no emails in the current view."); };
+        $$('.filter-btn').forEach(b => b.onclick = e => { $$('.filter-btn.active').forEach(btn => btn.classList.remove('active')); e.target.closest('.filter-btn').classList.add('active'); currentFilter = e.target.closest('.filter-btn').dataset.filter; renderInboxView(); });
+        $('#email-search').oninput = e => { currentSearchQuery = e.target.value; renderInboxView(); };
+        $('#sort-by').onchange = e => { currentSort = e.target.value; renderInboxView(); };
+        $('#sender-filter').onchange = e => { currentSenderFilter = e.target.value; renderInboxView(); };
+        $('#summary-sender-filter').onchange = e => {
+            const selectedSender = e.target.value;
+            const allSummaries = $$('#summary-content .sender-summary');
+
+            allSummaries.forEach(summaryDiv => {
+                if (selectedSender === 'All' || summaryDiv.dataset.sender === selectedSender) {
+                    summaryDiv.style.display = 'block';
+                } else {
+                    summaryDiv.style.display = 'none';
+                }
+            });
+        };
+        $('#page-size-select').onchange = e => {
+            pageSize = parseInt(e.target.value, 10);
+            currentPage = 1; // Reset to first page when page size changes
+            renderInboxView();
+        };
+        $('#prev-period-btn').onclick = () => { 
+            if (currentCalendarViewMode === 'week') {
+                currentCalendarDate.setDate(currentCalendarDate.getDate() - 7);
+            } else {
+                currentCalendarDate.setMonth(currentCalendarDate.getMonth() - 1); 
+            }
+            fetchCalendarEvents(); 
+        };
+        $('#next-period-btn').onclick = () => { 
+            if (currentCalendarViewMode === 'week') {
+                currentCalendarDate.setDate(currentCalendarDate.getDate() + 7);
+            } else {
+                currentCalendarDate.setMonth(currentCalendarDate.getMonth() + 1); 
+            }
+            fetchCalendarEvents(); 
+        };
+        $('#calendar-refresh-btn').onclick = fetchCalendarEvents;
+       
+        $$('[id^="close-"]').forEach(btn => btn.onclick = (e) => e.target.closest('.fixed').style.display = 'none');
+        $('#feedback-close-btn').onclick = () => $('#feedback-modal').style.display = 'none';
+        $('#hide-summary-btn').onclick = () => $('#summary-section').style.display = 'none';
+        
+        document.addEventListener('DOMContentLoaded', initializeApp);
+    </script>
+</body>
+</html>
+
+
+
+
+
+
