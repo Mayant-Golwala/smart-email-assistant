@@ -101,9 +101,20 @@
         <!-- Header with View Toggle -->
         <div class="flex items-center justify-between space-x-2 mb-8">
             <div class="flex items-center space-x-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-indigo-400" viewBox="0 0 20 20" fill="currentColor"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" /><path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" /></svg><h1 id="main-title" class="text-3xl font-bold text-gray-800">AI Smart Assistant</h1></div>
-            <div id="view-toggle-container" class="flex space-x-2 bg-gray-200 p-1 rounded-xl hidden">
-                <button id="inbox-view-btn" class="view-toggle-btn active px-4 py-2 text-sm font-bold rounded-lg">Inbox</button>
-                <button id="calendar-view-btn" class="view-toggle-btn px-4 py-2 text-sm font-bold rounded-lg">Calendar</button>
+            <div id="view-toggle-container" class="flex items-center space-x-4 hidden">
+                <div class="flex space-x-2 bg-gray-200 p-1 rounded-xl">
+                    <button id="inbox-view-btn" class="view-toggle-btn active px-4 py-2 text-sm font-bold rounded-lg">Inbox</button>
+                    <button id="calendar-view-btn" class="view-toggle-btn px-4 py-2 text-sm font-bold rounded-lg">Calendar</button>
+                </div>
+                <div class="relative group">
+                    <div id="profile-container" class="flex items-center space-x-2 cursor-pointer border-l-2 pl-4">
+                        <img id="profile-picture" class="h-8 w-8 rounded-full bg-gray-200 object-cover" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0iY3VycmVudENvbG9yIiBhcmlhLWhpZGRlbj0idHJ1ZSIgY2xhc3M9ImgtOCB3LTggdGV4dC1ncmF5LTYwMCI+PHBhdGggZmlsbC1ydWxlPSJldmVub2RkIiBkPSJNMTggMTAuNXaTMuNzVjMCAxLjQyNy0xLjEyMyAyLjYxLTQuMTQyIDMuMTYyYTMuNzQzIDMuNzQzIDAgMDEtNy43MTYgMGMtMy4wMi0uNTUyLTQuMTQyLTEuNzM1LTQuMTQyLTMuMTYyVjEwLjVBNy41IDcuNSAwIDEwMTggMTAuNXptLTYtNS4yNWEyLjI1IDIuMjUgMCAxMDAgNC41IDIuMjUgMi4yNSAwIDAwMC00LjV6IiBjbGlwLXJ1bGU9ImV2ZW5vZGQiPjwvcGF0aD48L3N2Zz4=" alt="Profile Picture">
+                        <span id="display-name" class="font-bold text-gray-700"></span>
+                    </div>
+                    <div class="absolute top-full right-0 w-48 bg-white rounded-md shadow-lg py-1 hidden group-hover:block z-50">
+                        <button id="logout-btn" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Logout</button>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -287,6 +298,9 @@
             viewToggleContainer.classList.add('hidden');
             inboxView.classList.add('hidden');
             calendarView.classList.add('hidden');
+            $('#profile-container').classList.add('hidden'); 
+            $('#display-name').textContent = ''; 
+            $('#profile-picture').src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0iY3VycmVudENvbG9yIiBhcmlhLWhpZGRlbj0idHJ1ZSIgY2xhc3M9ImgtOCB3LTggdGV4dC1ncmF5LTYwMCI+PHBhdGggZmlsbC1ydWxlPSJldmVub2RkIiBkPSJNMTggMTAuNXaTMuNzVjMCAxLjQyNy0xLjEyMyAyLjYxLTQuMTQyIDMuMTYyYTMuNzQzIDMuNzQzIDAgMDEtNy43MTYgMGMtMy4wMi0uNTUyLTQuMTQyLTEuNzM1LTQuMTQyLTMuMTYyVjEwLjVBNy41IDcuNSAwIDEwMTggMTAuNXptLTYtNS4yNWEyLjI1IDIuMjUgMCAxMDAgNC41IDIuMjUgMi4yNSAwIDAwMC00LjV6IiBjbGlwLXJ1bGU9ImV2ZW5vZGQiPjwvcGF0aD48L3N2Zz4=';
             $('#controls-container').style.display = 'none';
             $('#pagination-controls').classList.add('hidden');
             $('#summary-section').style.display = 'none';
@@ -303,6 +317,37 @@
         }
 
         // --- API & AI CALLS (Simulated) ---
+        async function fetchAndShowUserProfilePhoto() {
+            if (!accessToken) return;
+            try {
+                const response = await fetch(`${graphApiBaseEndpoint}/photo/$value`, {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (!response.ok) {
+                    // This is expected if the user has no photo, so we don't show an error.
+                    console.warn(`Could not fetch profile photo: ${response.statusText}`);
+                    return; 
+                }
+                const blob = await response.blob();
+                const imageUrl = URL.createObjectURL(blob);
+                $('#profile-picture').src = imageUrl;
+            } catch (error) {
+                console.error("Error fetching profile photo:", error);
+            }
+        }
+        async function fetchAndShowUserProfile() {
+            if (!accessToken) return;
+            try {
+                const profile = await graphApiCall(''); // Calls the /me endpoint
+                if (profile && profile.displayName) {
+                    $('#display-name').textContent = profile.displayName;
+                    $('#profile-container').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error("Could not fetch user profile.", error);
+                // Fail silently - don't show an error popup for this
+            }
+        }
         async function graphApiCall(endpoint, method = 'GET', body = null, headers = {}) {
             const defaultHeaders = { 'Authorization': `Bearer ${accessToken}` };
             if (method !== 'GET') { defaultHeaders['Content-Type'] = 'application/json'; }
@@ -1277,6 +1322,8 @@
                 viewToggleContainer.classList.remove('hidden');
                 inboxView.classList.remove('hidden');
                 fetchEmails(); 
+                fetchAndShowUserProfile();
+                fetchAndShowUserProfilePhoto();
             } else { 
                 resetToLoginState();
             } 
@@ -1308,7 +1355,7 @@
             const clearTokenBtn = target.closest('#clearTokenBtn');
             const saveTokenBtn = target.closest('#saveTokenBtn');
             const dailyBriefingBtn = target.closest('#daily-briefing-btn');
-            const findTimeBtn = target.closest('#ai-find-time-btn');
+                const findTimeBtn = target.closest('#ai-find-time-btn');
 
             if (emailCard && target.type !== 'checkbox') renderEmailDetails(fetchedEmails.find(em => em.id === emailCard.dataset.id));
             if (emailActionBtn) {
@@ -1397,7 +1444,9 @@
                 tokenInputContainer.style.display = 'none';
                 viewToggleContainer.classList.remove('hidden');
                 inboxView.classList.remove('hidden');
-                fetchEmails(); 
+                fetchEmails();
+                fetchAndShowUserProfile();
+                fetchAndShowUserProfilePhoto();
             }
             if(dailyBriefingBtn) {
                 fullscreenLoadingOverlay.style.display = 'flex';
@@ -1442,6 +1491,8 @@
         $('#inbox-view-btn').onclick = () => { inboxView.classList.remove('hidden'); calendarView.classList.add('hidden'); mainTitle.textContent = `AI Unread Inbox (${fetchedEmails.length})`; $('.view-toggle-btn.active').classList.remove('active'); $('#inbox-view-btn').classList.add('active'); updateBulkActionsBar(); };
         $('#calendar-view-btn').onclick = () => { inboxView.classList.add('hidden'); calendarView.classList.remove('hidden'); mainTitle.textContent = "AI Calendar"; $('.view-toggle-btn.active').classList.remove('active'); $('#calendar-view-btn').classList.add('active'); if (!calendarEvents.length) fetchCalendarEvents(); };
         
+        $('#logout-btn').onclick = resetToLoginState;
+
         $('#month-view-mode-btn').onclick = () => { currentCalendarViewMode = 'month'; $$('.calendar-view-mode-btn.active').forEach(b => b.classList.remove('active')); $('#month-view-mode-btn').classList.add('active'); fetchCalendarEvents(); };
         $('#week-view-mode-btn').onclick = () => { currentCalendarViewMode = 'week'; $$('.calendar-view-mode-btn.active').forEach(b => b.classList.remove('active')); $('#week-view-mode-btn').classList.add('active'); fetchCalendarEvents(); };
 
